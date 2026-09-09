@@ -56,7 +56,7 @@ parser.add_argument(
     "--device",
     default="cuda:0",
     type=str,
-    help="Device to use. If no CUDA-compatible device is found, will fallback to 'cpu'. Default: 'cuda:0'",
+    help="Device to use. If no CUDA-compatible device is found, will fallback to 'cpu'.",
 )
 
 parser.add_argument(
@@ -138,7 +138,10 @@ if not torch.cuda.is_available():
     device = "cpu"
 
 
+# ============================================================
 # Initialize model
+# ============================================================
+
 timer.start("Initializing model")
 
 model = TSR.from_pretrained(
@@ -153,11 +156,16 @@ model.to(device)
 timer.end("Initializing model")
 
 
+# ============================================================
 # Process images
+# ============================================================
+
 timer.start("Processing images")
 
 images = []
 
+# IMPORTANT:
+# Do NOT import rembg when --no-remove-bg is enabled.
 if args.no_remove_bg:
     rembg_session = None
 else:
@@ -168,8 +176,12 @@ else:
 
 for i, image_path in enumerate(args.image):
 
+    logging.info(f"Processing image: {image_path}")
+
     if args.no_remove_bg:
 
+        # Directly load RGB image.
+        # No rembg, onnxruntime, pymatting, or cupy required.
         image = np.array(
             Image.open(image_path).convert("RGB")
         )
@@ -223,7 +235,10 @@ for i, image_path in enumerate(args.image):
 timer.end("Processing images")
 
 
+# ============================================================
 # Run model
+# ============================================================
+
 for i, image in enumerate(images):
 
     logging.info(
@@ -233,6 +248,7 @@ for i, image in enumerate(images):
     timer.start("Running model")
 
     with torch.no_grad():
+
         scene_codes = model(
             [image],
             device=device,
@@ -241,7 +257,10 @@ for i, image in enumerate(images):
     timer.end("Running model")
 
 
+    # ========================================================
     # Rendering
+    # ========================================================
+
     if args.render:
 
         timer.start("Rendering")
@@ -265,6 +284,7 @@ for i, image in enumerate(images):
         for ri, render_image in enumerate(
             render_images[0]
         ):
+
             render_image.save(
                 os.path.join(
                     image_output_dir,
@@ -284,7 +304,10 @@ for i, image in enumerate(images):
         timer.end("Rendering")
 
 
+    # ========================================================
     # Extract mesh
+    # ========================================================
+
     timer.start("Extracting mesh")
 
     meshes = model.extract_mesh(
@@ -312,7 +335,10 @@ for i, image in enumerate(images):
     )
 
 
+    # ========================================================
     # Bake texture
+    # ========================================================
+
     if args.bake_texture:
 
         out_texture_path = os.path.join(
@@ -332,7 +358,10 @@ for i, image in enumerate(images):
         timer.end("Baking texture")
 
 
+        # ====================================================
         # Export mesh and texture
+        # ====================================================
+
         timer.start("Exporting mesh and texture")
 
         xatlas.export(
@@ -362,7 +391,10 @@ for i, image in enumerate(images):
         )
 
 
-    # Export mesh
+    # ========================================================
+    # Export mesh without texture baking
+    # ========================================================
+
     else:
 
         timer.start("Exporting mesh")
@@ -372,3 +404,6 @@ for i, image in enumerate(images):
         )
 
         timer.end("Exporting mesh")
+
+
+logging.info("Done.")
